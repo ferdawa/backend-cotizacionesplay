@@ -14,6 +14,7 @@ const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.static("public"));
 
 // Logging middleware
 app.use((req, res, next) => {

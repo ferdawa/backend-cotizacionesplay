@@ -49,6 +49,8 @@ export async function scrapeFalabella(url) {
       const selectors = [
         '[class*="prices-module_price"]',
         ".copy14",
+        ".copy12.primary.bold",
+        ".copy12",
         '[data-testid="pod-price"]',
         '[class*="price-"]',
         'span[class*="price"]',

@@ -7,7 +7,7 @@ export const games = [
     name: "Ghost of Yotei",
     slug: "ghost-of-yotei",
     platform: "PS5",
-    image: "/static/imagenes/PS5 Ghost Of Tushima Cover.png",
+    image: "/static/imagenes/PS5 Ghost Of Yotei Cover.png",
     stores: [
       {
         name: "weplay",
@@ -24,7 +24,7 @@ export const games = [
     name: "Alan Wake 2 Deluxe Edition",
     slug: "alan-wake-2-deluxe",
     platform: "PS5",
-    image: "/static/imagenes/PS5 Alan Wake 2 Deluxe.png",
+    image: "/static/imagenes/PS5 Alan Wake 2 Deluxe Cover.png",
     stores: [
       {
         name: "weplay",
@@ -38,11 +38,10 @@ export const games = [
   },
   {
     id: 3,
-    name: "God of War Ragnarök",
-    slug: "god-of-war-ragnarok",
-    platform: "PS5",
-    image:
-      "https://images.unsplash.com/photo-1552820728-8b83bb6b773f?w=400&h=600&fit=crop",
+    name: "Minecraft PS4",
+    slug: "minecraft-ps4",
+    platform: "PS4",
+    image: "/static/imagenes/PS4 Minecraft Cover.png",
     stores: [
       {
         name: "weplay",
@@ -50,17 +49,16 @@ export const games = [
       },
       {
         name: "falabella",
-        url: "https://www.falabella.com/falabella-cl/product/16564459/Videojuego-God-of-War-Ragnarok-PS5/16564459",
+        url: "https://www.falabella.com/falabella-cl/product/143225443/Minecraft-Playstation-4-Euro/143225444",
       },
     ],
   },
   {
     id: 4,
-    name: "Spider-Man 2",
-    slug: "spider-man-2",
+    name: "Helldivers 2",
+    slug: "helldivers-2",
     platform: "PS5",
-    image:
-      "https://images.unsplash.com/photo-1531171673193-06a2b44c8e85?w=400&h=600&fit=crop",
+    image: "/static/imagenes/PS5 Helldivers 2 Cover.png",
     stores: [
       {
         name: "weplay",
@@ -68,7 +66,7 @@ export const games = [
       },
       {
         name: "falabella",
-        url: "https://www.falabella.com/falabella-cl/product/16906785/Videojuego-Marvel-s-Spider-Man-2-PS5/16906785",
+        url: "https://www.falabella.com/falabella-cl/product/148490943/Helldivers-2-Formato-Fisico-Ps5/148490944",
       },
     ],
   },
