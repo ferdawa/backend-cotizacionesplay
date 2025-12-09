@@ -45,7 +45,7 @@ export const games = [
     stores: [
       {
         name: "weplay",
-        url: "https://www.weplay.cl/videojuego-god-of-war-ragnarok-ps5.html",
+        url: "",
       },
       {
         name: "falabella",
@@ -62,7 +62,7 @@ export const games = [
     stores: [
       {
         name: "weplay",
-        url: "https://www.weplay.cl/videojuego-marvels-spider-man-2-ps5.html",
+        url: "https://www.weplay.cl/preventa-helldivers-2-ps5.html",
       },
       {
         name: "falabella",
