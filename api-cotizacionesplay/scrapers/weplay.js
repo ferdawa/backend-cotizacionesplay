@@ -1,5 +1,5 @@
-import puppeteer from "puppeteer-core"; // Usamos la versión ligera
-import chrome from "chrome-aws-lambda"; // Usamos el binario optimizado
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium"; // <-- Importación del nuevo paquete
 
 export async function scrapeWeplay(url) {
   let browser;
@@ -7,11 +7,15 @@ export async function scrapeWeplay(url) {
   try {
     console.log(`🔍 Scraping Weplay: ${url}`);
 
-    // 🚨 CONFIGURACIÓN CLAVE PARA RENDER/LAMBDA
+    // 🚨 Configuración actualizada para Render (Node 20+) 🚨
     browser = await puppeteer.launch({
-      args: chrome.args, // Argumentos optimizados para entornos de servidor
-      executablePath: await chrome.executablePath, // Ruta dinámica al binario incluido
-      headless: chrome.headless,
+      // Argumentos obligatorios para la ejecución sin sandbox en Render
+      args: [...chromium.args, "--hide-scrollbars", "--disable-web-security"],
+      // Apunta al ejecutable de Chromium provisto por el paquete
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+      // Otras configuraciones
+      ignoreHTTPSErrors: true,
     });
 
     const page = await browser.newPage();
