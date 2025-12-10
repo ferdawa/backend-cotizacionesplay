@@ -1,4 +1,5 @@
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core"; // Usamos la versión ligera
+import chrome from "chrome-aws-lambda"; // Usamos el binario optimizado
 
 export async function scrapeFalabella(url) {
   let browser;
@@ -6,22 +7,11 @@ export async function scrapeFalabella(url) {
   try {
     console.log(`🔍 Scraping Falabella: ${url}`);
 
-    // Obtiene la ruta del entorno de Render. Si no existe (estás en local),
-    // usa 'null', que le dice a Puppeteer que use la versión instalada localmente.
-    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || null;
-
+    // 🚨 CONFIGURACIÓN CLAVE PARA RENDER/LAMBDA
     browser = await puppeteer.launch({
-      headless: true,
-      executablePath: executablePath, // Usa la variable de Render o null (local)
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-accelerated-2d-canvas",
-        "--no-first-run",
-        "--no-zygote",
-        "--disable-gpu",
-      ],
+      args: chrome.args, // Argumentos optimizados para entornos de servidor
+      executablePath: await chrome.executablePath, // Ruta dinámica al binario incluido
+      headless: chrome.headless,
     });
 
     const page = await browser.newPage();
