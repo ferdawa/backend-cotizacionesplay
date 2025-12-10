@@ -31,7 +31,7 @@ export async function scrapeFalabella(url) {
     // Navegar a la página
     await page.goto(url, {
       waitUntil: "networkidle2",
-      timeout: 30000,
+      timeout: 90000,
     });
 
     // Esperar a que cargue el precio
