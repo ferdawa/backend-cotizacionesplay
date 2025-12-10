@@ -126,28 +126,48 @@ app.post("/api/games/:id/update", async (req, res) => {
       });
     }
 
+    // ... (código anterior: verificación de cooldown, log, etc)
+
     console.log(`\n🎮 Actualizando precios para: ${game.name}`);
 
-    // Scraping de todas las tiendas
-    const scrapingPromises = game.stores.map(async (store) => {
-      if (store.name === "falabella") {
-        return await scrapeFalabella(store.url);
-      }
-      if (store.name === "weplay") {
-        return await scrapeWeplay(store.url);
-      }
-      // Aquí puedes agregar más scrapers
-      return {
-        store: store.name,
-        success: false,
-        error: "Scraper no implementado",
-      };
-    });
+    // ==========================================
+    // INICIO DEL CAMBIO: EJECUCIÓN SECUENCIAL
+    // ==========================================
 
-    const results = await Promise.all(scrapingPromises);
+    const results = [];
+
+    // Usamos un bucle for...of para ir TIENDA POR TIENDA
+    for (const store of game.stores) {
+      let result;
+
+      // Pequeña pausa de seguridad para liberar memoria/procesos anteriores
+      if (results.length > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+
+      if (store.name === "falabella") {
+        result = await scrapeFalabella(store.url);
+      } else if (store.name === "weplay") {
+        result = await scrapeWeplay(store.url);
+      } else {
+        result = {
+          store: store.name,
+          success: false,
+          error: "Scraper no implementado",
+        };
+      }
+
+      results.push(result);
+    }
+
+    // ==========================================
+    // FIN DEL CAMBIO
+    // ==========================================
 
     // Guardar precios exitosos en el cache
     const successfulPrices = results.filter((r) => r.success);
+
+    // ... (resto del código igual)
 
     if (successfulPrices.length > 0) {
       pricesCache.set(gameId, successfulPrices);
@@ -186,25 +206,47 @@ app.post("/api/update-all", async (req, res) => {
     const results = [];
 
     for (const game of games) {
+      // ... (dentro del bucle: for (const game of games) { ... )
+
       console.log(`\n📦 Procesando: ${game.name}`);
 
-      const scrapingPromises = game.stores.map(async (store) => {
-        if (store.name === "falabella") {
-          return await scrapeFalabella(store.url);
-        }
-        if (store.name === "weplay") {
-          return await scrapeWeplay(store.url);
-        }
-        return { store: store.name, success: false };
-      });
+      // ==========================================
+      // INICIO DEL CAMBIO: EJECUCIÓN SECUENCIAL
+      // ==========================================
 
-      const gameResults = await Promise.all(scrapingPromises);
+      const gameResults = [];
+
+      for (const store of game.stores) {
+        let storeResult;
+
+        // Pausa entre tiendas del mismo juego
+        if (gameResults.length > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+
+        if (store.name === "falabella") {
+          storeResult = await scrapeFalabella(store.url);
+        } else if (store.name === "weplay") {
+          storeResult = await scrapeWeplay(store.url);
+        } else {
+          storeResult = { store: store.name, success: false };
+        }
+
+        gameResults.push(storeResult);
+      }
+
+      // ==========================================
+      // FIN DEL CAMBIO
+      // ==========================================
+
       const successfulPrices = gameResults.filter((r) => r.success);
 
       if (successfulPrices.length > 0) {
         pricesCache.set(game.id, successfulPrices);
         lastUpdates.set(game.id, Date.now());
       }
+
+      // ... (resto del código igual)
 
       results.push({
         gameId: game.id,
