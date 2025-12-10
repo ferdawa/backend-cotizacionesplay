@@ -6,8 +6,13 @@ export async function scrapeWeplay(url) {
   try {
     console.log(`🔍 Scraping Weplay: ${url}`);
 
+    // Obtiene la ruta del entorno de Render. Si no existe (estás en local),
+    // usa 'null', que le dice a Puppeteer que use la versión instalada localmente.
+    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || null;
+
     browser = await puppeteer.launch({
       headless: true,
+      executablePath: executablePath, // Usa la variable de Render o null (local)
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
