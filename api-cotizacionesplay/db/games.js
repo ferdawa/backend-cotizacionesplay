@@ -70,23 +70,6 @@ export const games = [
       },
     ],
   },
-  {
-    id: 5,
-    name: "Minecraft PS5",
-    slug: "minecraft-ps5",
-    platform: "PS5",
-    image: "/static/imagenes/PS5 Minecraft Cover.png",
-    stores: [
-      {
-        name: "weplay",
-        url: "https://www.weplay.cl/minecraft-ps5.html",
-      },
-      {
-        name: "falabella",
-        url: "https://www.falabella.com/falabella-cl/product/146358423/Juego-Fisico-Minecraft-PS5/146358424",
-      },
-    ],
-  },
 ];
 
 // Cache de precios (simula una tabla de precios)
