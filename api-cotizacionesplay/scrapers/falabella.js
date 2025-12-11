@@ -1,5 +1,5 @@
 import puppeteer from "puppeteer-core";
-import chromium from "@sparticuz/chromium"; // <-- Importación del nuevo paquete
+import chromium from "@sparticuz/chromium";
 
 export async function scrapeFalabella(url) {
   let browser;
@@ -7,62 +7,84 @@ export async function scrapeFalabella(url) {
   try {
     console.log(`🔍 Scraping Falabella: ${url}`);
 
-    // 🚨 Configuración actualizada para Render (Node 20+) 🚨
+    // Configuración para Render
     browser = await puppeteer.launch({
-      // Argumentos obligatorios para la ejecución sin sandbox en Render
-      args: [...chromium.args, "--hide-scrollbars", "--disable-web-security"],
-      // Apunta al ejecutable de Chromium provisto por el paquete
+      args: [
+        ...chromium.args,
+        "--hide-scrollbars",
+        "--disable-web-security",
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage", // Importante para contenedores con poca memoria
+        "--disable-accelerated-2d-canvas",
+        "--disable-gpu",
+      ],
+      defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
-      // Otras configuraciones
       ignoreHTTPSErrors: true,
     });
 
     const page = await browser.newPage();
 
-    // User agent para parecer un navegador real
+    // 1. OPTIMIZACIÓN: Bloquear carga de recursos pesados e innecesarios
+    await page.setRequestInterception(true);
+    page.on("request", (req) => {
+      const resourceType = req.resourceType();
+      if (
+        resourceType === "image" ||
+        resourceType === "stylesheet" ||
+        resourceType === "font" ||
+        resourceType === "media" ||
+        resourceType === "other" // A veces bloquea analytics/ads
+      ) {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
+
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
 
-    // Configurar viewport
     await page.setViewport({ width: 1920, height: 1080 });
 
-    // Navegar a la página
+    // 2. OPTIMIZACIÓN: Cambiar estrategia de espera
+    // 'domcontentloaded' dispara mucho antes que 'networkidle2'
     await page.goto(url, {
-      waitUntil: "networkidle2",
-      timeout: 90000,
+      waitUntil: "domcontentloaded",
+      timeout: 60000, // Bajamos a 60s, debería ser suficiente ahora
     });
 
-    // Esperar a que cargue el precio
+    // Esperar al selector (esto es lo que realmente importa)
     await page.waitForSelector(
       '[class*="price"], .copy14, [data-testid*="price"]',
-      {
-        timeout: 10000,
-      }
+      { timeout: 15000 }
     );
 
-    // Extraer el precio
     const priceData = await page.evaluate(() => {
-      // Intentar múltiples selectores
       const selectors = [
         '[class*="prices-module_price"]',
+        '[data-testid="pod-price"]', // Falabella suele usar este ahora
         ".copy14",
         ".copy12.primary.bold",
-        ".copy12",
-        '[data-testid="pod-price"]',
         '[class*="price-"]',
         'span[class*="price"]',
+        'li[class*="prices"]', // A veces están en listas
       ];
 
       for (const selector of selectors) {
-        const element = document.querySelector(selector);
-        if (element) {
-          const text = element.textContent.trim();
-          // Extraer números del texto
-          const price = parseInt(text.replace(/\D/g, ""));
+        // Buscamos todos los elementos por si hay precio normal y precio tarjeta
+        const elements = document.querySelectorAll(selector);
 
-          if (price && price > 0) {
+        for (const element of elements) {
+          const text = element.textContent.trim();
+          // Lógica mejorada para limpiar "$", "." y "CLP"
+          const price = parseInt(text.replace(/[\$\.CLP\s]/g, ""));
+
+          if (price && price > 1000) {
+            // Filtro simple para evitar falsos positivos de $1 o $0
             return {
               price,
               rawText: text,
@@ -71,12 +93,11 @@ export async function scrapeFalabella(url) {
           }
         }
       }
-
       return null;
     });
 
     if (!priceData || !priceData.price) {
-      throw new Error("No se pudo extraer el precio");
+      throw new Error("No se pudo extraer el precio (Selector no encontrado)");
     }
 
     console.log(
@@ -95,7 +116,6 @@ export async function scrapeFalabella(url) {
     };
   } catch (error) {
     console.error("❌ Error scraping Falabella:", error.message);
-
     return {
       store: "Falabella",
       price: null,
