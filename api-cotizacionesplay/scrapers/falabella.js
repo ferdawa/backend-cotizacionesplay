@@ -1,5 +1,9 @@
-import puppeteer from "puppeteer-core";
+import puppeteer from "puppeteer-extra"; // Usamos puppeteer-extra en vez de puppeteer-core directo
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import chromium from "@sparticuz/chromium";
+
+// Activamos el modo sigilo
+puppeteer.use(StealthPlugin());
 
 export async function scrapeFalabella(url) {
   let browser;
@@ -7,7 +11,7 @@ export async function scrapeFalabella(url) {
   try {
     console.log(`🔍 Scraping Falabella: ${url}`);
 
-    // Configuración para Render
+    // Configuración para Render con Stealth
     browser = await puppeteer.launch({
       args: [
         ...chromium.args,
@@ -15,9 +19,8 @@ export async function scrapeFalabella(url) {
         "--disable-web-security",
         "--no-sandbox",
         "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage", // Importante para contenedores con poca memoria
-        "--disable-accelerated-2d-canvas",
-        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--disable-blink-features=AutomationControlled", // Truco extra para evitar detección
       ],
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
@@ -27,69 +30,61 @@ export async function scrapeFalabella(url) {
 
     const page = await browser.newPage();
 
-    // 1. OPTIMIZACIÓN: Bloquear carga de recursos pesados e innecesarios
-    await page.setRequestInterception(true);
-    page.on("request", (req) => {
-      const resourceType = req.resourceType();
-      if (
-        resourceType === "image" ||
-        resourceType === "stylesheet" ||
-        resourceType === "font" ||
-        resourceType === "media" ||
-        resourceType === "other" // A veces bloquea analytics/ads
-      ) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
-
+    // User Agent rotativo simple (versión más moderna)
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
 
     await page.setViewport({ width: 1920, height: 1080 });
 
-    // 2. OPTIMIZACIÓN: Cambiar estrategia de espera
-    // 'domcontentloaded' dispara mucho antes que 'networkidle2'
+    // Navegar
     await page.goto(url, {
       waitUntil: "domcontentloaded",
-      timeout: 60000, // Bajamos a 60s, debería ser suficiente ahora
+      timeout: 45000,
     });
 
-    // Esperar al selector (esto es lo que realmente importa)
-    await page.waitForSelector(
-      '[class*="price"], .copy14, [data-testid*="price"]',
-      { timeout: 15000 }
-    );
+    // Diagnóstico: Ver qué título tiene la página antes de buscar el selector
+    const pageTitle = await page.title();
+    console.log(`📄 Título de la página cargada: "${pageTitle}"`);
+
+    // Esperar al selector
+    try {
+      await page.waitForSelector(
+        '[class*="price"], .copy14, [data-testid*="price"]',
+        { timeout: 15000 }
+      );
+    } catch (e) {
+      // Si falla, imprimimos el contenido del body para saber qué nos mostró Falabella
+      const bodyText = await page.evaluate(() =>
+        document.body.innerText.substring(0, 200)
+      );
+      console.error(
+        `⚠️ Timeout esperando selector. Texto visible en la página: "${bodyText.replace(
+          /\n/g,
+          " "
+        )}..."`
+      );
+      throw e; // Relanzamos el error para que vaya al catch principal
+    }
 
     const priceData = await page.evaluate(() => {
       const selectors = [
+        '[data-testid="pod-price"]',
         '[class*="prices-module_price"]',
-        '[data-testid="pod-price"]', // Falabella suele usar este ahora
-        ".copy14",
-        ".copy12.primary.bold",
+        'span[class*="copy14"]',
         '[class*="price-"]',
-        'span[class*="price"]',
-        'li[class*="prices"]', // A veces están en listas
+        'li[class*="prices"]',
       ];
 
       for (const selector of selectors) {
-        // Buscamos todos los elementos por si hay precio normal y precio tarjeta
         const elements = document.querySelectorAll(selector);
-
         for (const element of elements) {
           const text = element.textContent.trim();
-          // Lógica mejorada para limpiar "$", "." y "CLP"
-          const price = parseInt(text.replace(/[\$\.CLP\s]/g, ""));
+          // Limpieza agresiva de caracteres no numéricos
+          const price = parseInt(text.replace(/\D/g, ""));
 
           if (price && price > 1000) {
-            // Filtro simple para evitar falsos positivos de $1 o $0
-            return {
-              price,
-              rawText: text,
-              selector,
-            };
+            return { price, rawText: text, selector };
           }
         }
       }
@@ -97,13 +92,11 @@ export async function scrapeFalabella(url) {
     });
 
     if (!priceData || !priceData.price) {
-      throw new Error("No se pudo extraer el precio (Selector no encontrado)");
+      throw new Error("Selector encontrado pero precio no extraído.");
     }
 
     console.log(
-      `✅ Precio encontrado en Falabella: $${priceData.price.toLocaleString(
-        "es-CL"
-      )}`
+      `✅ Precio encontrado: $${priceData.price.toLocaleString("es-CL")}`
     );
 
     return {
@@ -115,18 +108,16 @@ export async function scrapeFalabella(url) {
       success: true,
     };
   } catch (error) {
-    console.error("❌ Error scraping Falabella:", error.message);
+    // Error handling simplificado
+    console.error(`❌ Error final Falabella: ${error.message}`);
     return {
       store: "Falabella",
       price: null,
       error: error.message,
       url,
-      scrapedAt: new Date().toISOString(),
       success: false,
     };
   } finally {
-    if (browser) {
-      await browser.close();
-    }
+    if (browser) await browser.close();
   }
 }
