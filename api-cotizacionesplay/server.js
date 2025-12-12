@@ -4,6 +4,9 @@ import dotenv from "dotenv";
 import { games, pricesCache, lastUpdates } from "./db/games.js";
 import { scrapeFalabella } from "./scrapers/falabella.js";
 import { scrapeWeplay } from "./scrapers/weplay.js";
+import { scrapeParis } from "./scrapers/paris.js";
+import { scrapeMercadoLibre } from "./scrapers/mercadolibre.js";
+import { scrapeLider } from "./scrapers/lider.js";
 
 dotenv.config();
 
@@ -14,7 +17,6 @@ const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public"));
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -126,48 +128,81 @@ app.post("/api/games/:id/update", async (req, res) => {
       });
     }
 
-    // ... (código anterior: verificación de cooldown, log, etc)
-
     console.log(`\n🎮 Actualizando precios para: ${game.name}`);
 
-    // ==========================================
-    // INICIO DEL CAMBIO: EJECUCIÓN SECUENCIAL
-    // ==========================================
+    // Scraping de todas las tiendas (con soporte para múltiples URLs)
+    const scrapingPromises = [];
 
-    const results = [];
-
-    // Usamos un bucle for...of para ir TIENDA POR TIENDA
     for (const store of game.stores) {
-      let result;
+      // Verificar si la tienda tiene múltiples URLs (vendedores)
+      if (store.urls && Array.isArray(store.urls)) {
+        // Scrapear cada vendedor
+        for (const sellerInfo of store.urls) {
+          if (sellerInfo.url) {
+            const promise = (async () => {
+              let result;
+              if (store.name === "falabella") {
+                result = await scrapeFalabella(sellerInfo.url);
+              } else if (store.name === "weplay") {
+                result = await scrapeWeplay(sellerInfo.url);
+              } else if (store.name === "paris") {
+                result = await scrapeParis(sellerInfo.url);
+              } else if (store.name === "mercadolibre") {
+                result = await scrapeMercadoLibre(sellerInfo.url);
+              } else if (store.name === "lider") {
+                result = await scrapeLider(sellerInfo.url);
+              } else {
+                return {
+                  store: store.name,
+                  success: false,
+                  error: "Scraper no implementado",
+                };
+              }
 
-      // Pequeña pausa de seguridad para liberar memoria/procesos anteriores
-      if (results.length > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+              // Agregar información del vendedor al resultado
+              return {
+                ...result,
+                seller: sellerInfo.seller,
+                store: `${store.name} (${sellerInfo.seller})`,
+              };
+            })();
+
+            scrapingPromises.push(promise);
+          }
+        }
+      } else if (store.url) {
+        // URL única (comportamiento anterior)
+        const promise = (async () => {
+          if (store.name === "falabella") {
+            return await scrapeFalabella(store.url);
+          }
+          if (store.name === "weplay") {
+            return await scrapeWeplay(store.url);
+          }
+          if (store.name === "paris") {
+            return await scrapeParis(store.url);
+          }
+          if (store.name === "mercadolibre") {
+            return await scrapeMercadoLibre(store.url);
+          }
+          if (store.name === "lider") {
+            return await scrapeLider(store.url);
+          }
+          return {
+            store: store.name,
+            success: false,
+            error: "Scraper no implementado",
+          };
+        })();
+
+        scrapingPromises.push(promise);
       }
-
-      if (store.name === "falabella") {
-        result = await scrapeFalabella(store.url);
-      } else if (store.name === "weplay") {
-        result = await scrapeWeplay(store.url);
-      } else {
-        result = {
-          store: store.name,
-          success: false,
-          error: "Scraper no implementado",
-        };
-      }
-
-      results.push(result);
     }
 
-    // ==========================================
-    // FIN DEL CAMBIO
-    // ==========================================
+    const results = await Promise.all(scrapingPromises);
 
     // Guardar precios exitosos en el cache
     const successfulPrices = results.filter((r) => r.success);
-
-    // ... (resto del código igual)
 
     if (successfulPrices.length > 0) {
       pricesCache.set(gameId, successfulPrices);
@@ -206,47 +241,69 @@ app.post("/api/update-all", async (req, res) => {
     const results = [];
 
     for (const game of games) {
-      // ... (dentro del bucle: for (const game of games) { ... )
-
       console.log(`\n📦 Procesando: ${game.name}`);
 
-      // ==========================================
-      // INICIO DEL CAMBIO: EJECUCIÓN SECUENCIAL
-      // ==========================================
-
-      const gameResults = [];
+      const scrapingPromises = [];
 
       for (const store of game.stores) {
-        let storeResult;
-
-        // Pausa entre tiendas del mismo juego
-        if (gameResults.length > 0) {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+        // Soporte para múltiples URLs por tienda
+        if (store.urls && Array.isArray(store.urls)) {
+          for (const sellerInfo of store.urls) {
+            if (sellerInfo.url) {
+              const promise = (async () => {
+                let result;
+                if (store.name === "falabella") {
+                  result = await scrapeFalabella(sellerInfo.url);
+                } else if (store.name === "weplay") {
+                  result = await scrapeWeplay(sellerInfo.url);
+                } else if (store.name === "paris") {
+                  result = await scrapeParis(sellerInfo.url);
+                } else if (store.name === "mercadolibre") {
+                  result = await scrapeMercadoLibre(sellerInfo.url);
+                } else if (store.name === "lider") {
+                  result = await scrapeLider(sellerInfo.url);
+                } else {
+                  return { store: store.name, success: false };
+                }
+                return {
+                  ...result,
+                  seller: sellerInfo.seller,
+                  store: `${store.name} (${sellerInfo.seller})`,
+                };
+              })();
+              scrapingPromises.push(promise);
+            }
+          }
+        } else if (store.url) {
+          const promise = (async () => {
+            if (store.name === "falabella") {
+              return await scrapeFalabella(store.url);
+            }
+            if (store.name === "weplay") {
+              return await scrapeWeplay(store.url);
+            }
+            if (store.name === "paris") {
+              return await scrapeParis(store.url);
+            }
+            if (store.name === "mercadolibre") {
+              return await scrapeMercadoLibre(store.url);
+            }
+            if (store.name === "lider") {
+              return await scrapeLider(store.url);
+            }
+            return { store: store.name, success: false };
+          })();
+          scrapingPromises.push(promise);
         }
-
-        if (store.name === "falabella") {
-          storeResult = await scrapeFalabella(store.url);
-        } else if (store.name === "weplay") {
-          storeResult = await scrapeWeplay(store.url);
-        } else {
-          storeResult = { store: store.name, success: false };
-        }
-
-        gameResults.push(storeResult);
       }
 
-      // ==========================================
-      // FIN DEL CAMBIO
-      // ==========================================
-
+      const gameResults = await Promise.all(scrapingPromises);
       const successfulPrices = gameResults.filter((r) => r.success);
 
       if (successfulPrices.length > 0) {
         pricesCache.set(game.id, successfulPrices);
         lastUpdates.set(game.id, Date.now());
       }
-
-      // ... (resto del código igual)
 
       results.push({
         gameId: game.id,

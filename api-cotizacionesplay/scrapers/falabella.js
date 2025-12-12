@@ -1,173 +1,113 @@
-import puppeteer from "puppeteer-extra";
-import StealthPlugin from "puppeteer-extra-plugin-stealth";
-import chromium from "@sparticuz/chromium";
-
-puppeteer.use(StealthPlugin());
+import puppeteer from "puppeteer";
 
 export async function scrapeFalabella(url) {
   let browser;
+
   try {
-    console.log(`🔍 Scraping Falabella (Modo JSON-LD): ${url}`);
+    console.log(`🔍 Scraping Falabella: ${url}`);
 
     browser = await puppeteer.launch({
+      headless: true,
       args: [
-        ...chromium.args,
-        "--hide-scrollbars",
-        "--disable-web-security",
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
-        "--disable-blink-features=AutomationControlled",
-        "--window-size=1920,1080",
+        "--disable-accelerated-2d-canvas",
+        "--no-first-run",
+        "--no-zygote",
+        "--disable-gpu",
       ],
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-      ignoreHTTPSErrors: true,
     });
 
     const page = await browser.newPage();
 
-    // Bloqueamos imágenes y fuentes para velocidad máxima
-    await page.setRequestInterception(true);
-    page.on("request", (req) => {
-      const type = req.resourceType();
-      if (["image", "font", "stylesheet", "media"].includes(type)) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
-
+    // User agent para parecer un navegador real
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
 
-    // Navegar y esperar SOLO al DOM (no a la red completa)
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
+    // Configurar viewport
+    await page.setViewport({ width: 1920, height: 1080 });
 
-    // --- ESTRATEGIA 1: METADATOS (JSON-LD) ---
-    // Falabella suele poner el precio en un script para Google
-    const jsonPrice = await page.evaluate(() => {
-      try {
-        const scripts = document.querySelectorAll(
-          'script[type="application/ld+json"]'
-        );
-        for (const script of scripts) {
-          const data = JSON.parse(script.innerText);
-          // A veces es un array, a veces un objeto
-          const product = Array.isArray(data) ? data[0] : data;
+    // Navegar a la página
+    await page.goto(url, {
+      waitUntil: "networkidle2",
+      timeout: 30000,
+    });
 
-          if (
-            product &&
-            (product["@type"] === "Product" ||
-              product["@type"] === "SoftwareApplication")
-          ) {
-            if (product.offers && product.offers.price) {
-              return parseInt(product.offers.price);
-            }
-            if (product.offers && product.offers.lowPrice) {
-              return parseInt(product.offers.lowPrice);
-            }
-          }
-        }
-        return null;
-      } catch (e) {
-        return null;
+    // Esperar a que cargue el precio
+    await page.waitForSelector(
+      '[class*="price"], .copy14, [data-testid*="price"]',
+      {
+        timeout: 10000,
       }
-    });
+    );
 
-    if (jsonPrice) {
-      console.log(`✅ Precio encontrado vía JSON-LD: $${jsonPrice}`);
-      return {
-        store: "Falabella",
-        price: jsonPrice,
-        currency: "CLP",
-        url,
-        scrapedAt: new Date().toISOString(),
-        success: true,
-      };
-    }
-
-    // --- ESTRATEGIA 2: META TAGS (Open Graph) ---
-    // Si falla el JSON, buscamos en los meta tags del head
-    const metaPrice = await page.evaluate(() => {
-      const meta =
-        document.querySelector('meta[property="product:price:amount"]') ||
-        document.querySelector('meta[property="og:price:amount"]');
-      return meta ? parseInt(meta.content) : null;
-    });
-
-    if (metaPrice) {
-      console.log(`✅ Precio encontrado vía Meta Tags: $${metaPrice}`);
-      return {
-        store: "Falabella",
-        price: metaPrice,
-        currency: "CLP",
-        url,
-        scrapedAt: new Date().toISOString(),
-        success: true,
-      };
-    }
-
-    // --- ESTRATEGIA 3: SELECTORES VISUALES (Fallback) ---
-    // Solo si todo lo anterior falla, esperamos un poco más e intentamos leer el HTML
-    console.log("⚠️ JSON/Meta falló, intentando selectores visuales...");
-
-    // Esperamos selectores específicos de precio
-    try {
-      await page.waitForSelector(
-        '[data-testid="pod-price"], [class*="prices-module"], .copy10.primary',
-        { timeout: 10000 }
-      );
-    } catch (e) {
-      console.log("⚠️ Timeout visual, intentando leer lo que haya...");
-    }
-
-    const visualPrice = await page.evaluate(() => {
-      // Selectores actualizados
+    // Extraer el precio
+    const priceData = await page.evaluate(() => {
+      // Intentar múltiples selectores
       const selectors = [
+        '[class*="prices-module_price"]',
+        ".copy14",
+        ".copy12.primary.bold",
+        ".copy12",
         '[data-testid="pod-price"]',
-        '[class*="prices-module_price"]', // Clases genéricas
-        "span.copy10.primary.medium", // Clases de fuente falabella
-        'div[class*="price"]',
+        '[class*="price-"]',
+        'span[class*="price"]',
       ];
 
-      for (const sel of selectors) {
-        const els = document.querySelectorAll(sel);
-        for (const el of els) {
-          const txt = el.innerText;
-          const val = parseInt(txt.replace(/\D/g, ""));
-          if (val > 1000) return val;
+      for (const selector of selectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+          const text = element.textContent.trim();
+          // Extraer números del texto
+          const price = parseInt(text.replace(/\D/g, ""));
+
+          if (price && price > 0) {
+            return {
+              price,
+              rawText: text,
+              selector,
+            };
+          }
         }
       }
+
       return null;
     });
 
-    if (!visualPrice)
-      throw new Error("No se pudo extraer precio por ningún método");
+    if (!priceData || !priceData.price) {
+      throw new Error("No se pudo extraer el precio");
+    }
 
-    console.log(`✅ Precio encontrado visualmente: $${visualPrice}`);
+    console.log(
+      `✅ Precio encontrado en Falabella: $${priceData.price.toLocaleString(
+        "es-CL"
+      )}`
+    );
+
     return {
       store: "Falabella",
-      price: visualPrice,
+      price: priceData.price,
       currency: "CLP",
       url,
       scrapedAt: new Date().toISOString(),
       success: true,
     };
   } catch (error) {
-    console.error(`❌ Error Falabella: ${error.message}`);
-    // Opcional: Tomar screenshot en error (solo si tienes donde guardarlo)
-    // await page.screenshot({ path: 'error_falabella.png' });
+    console.error("❌ Error scraping Falabella:", error.message);
+
     return {
       store: "Falabella",
       price: null,
       error: error.message,
       url,
+      scrapedAt: new Date().toISOString(),
       success: false,
     };
   } finally {
-    if (browser) await browser.close();
+    if (browser) {
+      await browser.close();
+    }
   }
 }

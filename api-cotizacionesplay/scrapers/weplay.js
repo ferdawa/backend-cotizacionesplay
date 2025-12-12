@@ -1,5 +1,4 @@
-import puppeteer from "puppeteer-core";
-import chromium from "@sparticuz/chromium"; // <-- Importación del nuevo paquete
+import puppeteer from "puppeteer";
 
 export async function scrapeWeplay(url) {
   let browser;
@@ -7,15 +6,17 @@ export async function scrapeWeplay(url) {
   try {
     console.log(`🔍 Scraping Weplay: ${url}`);
 
-    // 🚨 Configuración actualizada para Render (Node 20+) 🚨
     browser = await puppeteer.launch({
-      // Argumentos obligatorios para la ejecución sin sandbox en Render
-      args: [...chromium.args, "--hide-scrollbars", "--disable-web-security"],
-      // Apunta al ejecutable de Chromium provisto por el paquete
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-      // Otras configuraciones
-      ignoreHTTPSErrors: true,
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-accelerated-2d-canvas",
+        "--no-first-run",
+        "--no-zygote",
+        "--disable-gpu",
+      ],
     });
 
     const page = await browser.newPage();
@@ -31,7 +32,7 @@ export async function scrapeWeplay(url) {
     // Navegar a la página
     await page.goto(url, {
       waitUntil: "networkidle2",
-      timeout: 90000,
+      timeout: 30000,
     });
 
     // Esperar a que cargue el precio (selector específico de Weplay)
