@@ -46,6 +46,23 @@ export const games = [
         name: "lider",
         url: "https://www.lider.cl/ip/videojuegos/sony-juego-ghost-of-yot-ps5/00071171959787",
       },
+      {
+        name: "paris",
+        urls: [
+          {
+            url: "https://www.paris.cl/juego-ps5-ghost-of-yotei-edicion-estandar-273731999.html",
+            seller: "Paris",
+          },
+          {
+            url: "https://www.paris.cl/ghost-of-yotei-ps5-MKH9U5AVM5.html",
+            seller: "Mathogames Store",
+          },
+        ],
+      },
+      {
+        name: "sony",
+        url: "https://store.sony.cl/ps5-ghost-of-yotei/p",
+      },
     ],
   },
   {

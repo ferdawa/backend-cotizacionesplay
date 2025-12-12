@@ -7,6 +7,7 @@ import { scrapeWeplay } from "./scrapers/weplay.js";
 import { scrapeParis } from "./scrapers/paris.js";
 import { scrapeMercadoLibre } from "./scrapers/mercadolibre.js";
 import { scrapeLider } from "./scrapers/lider.js";
+import { scrapeSony } from "./scrapers/sony.js";
 
 dotenv.config();
 
@@ -151,6 +152,8 @@ app.post("/api/games/:id/update", async (req, res) => {
                 result = await scrapeMercadoLibre(sellerInfo.url);
               } else if (store.name === "lider") {
                 result = await scrapeLider(sellerInfo.url);
+              } else if (store.name === "sony") {
+                result = await scrapeSony(sellerInfo.url);
               } else {
                 return {
                   store: store.name,
@@ -187,6 +190,9 @@ app.post("/api/games/:id/update", async (req, res) => {
           }
           if (store.name === "lider") {
             return await scrapeLider(store.url);
+          }
+          if (store.name === "sony") {
+            return await scrapeSony(store.url);
           }
           return {
             store: store.name,
@@ -262,6 +268,8 @@ app.post("/api/update-all", async (req, res) => {
                   result = await scrapeMercadoLibre(sellerInfo.url);
                 } else if (store.name === "lider") {
                   result = await scrapeLider(sellerInfo.url);
+                } else if (store.name === "sony") {
+                  result = await scrapeSony(sellerInfo.url);
                 } else {
                   return { store: store.name, success: false };
                 }
@@ -290,6 +298,9 @@ app.post("/api/update-all", async (req, res) => {
             }
             if (store.name === "lider") {
               return await scrapeLider(store.url);
+            }
+            if (store.name === "sony") {
+              return await scrapeSony(store.url);
             }
             return { store: store.name, success: false };
           })();
