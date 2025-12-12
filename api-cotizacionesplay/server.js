@@ -4,6 +4,9 @@ import dotenv from "dotenv";
 import { games, pricesCache, lastUpdates } from "./db/games.js";
 import { scrapeFalabella } from "./scrapers/falabella.js";
 import { scrapeWeplay } from "./scrapers/weplay.js";
+import { scrapeParis } from "./scrapers/paris.js";
+import { scrapeMercadoLibre } from "./scrapers/mercadolibre.js";
+import { scrapeLider } from "./scrapers/lider.js";
 
 dotenv.config();
 
@@ -14,7 +17,6 @@ const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public"));
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -128,21 +130,74 @@ app.post("/api/games/:id/update", async (req, res) => {
 
     console.log(`\n🎮 Actualizando precios para: ${game.name}`);
 
-    // Scraping de todas las tiendas
-    const scrapingPromises = game.stores.map(async (store) => {
-      if (store.name === "falabella") {
-        return await scrapeFalabella(store.url);
+    // Scraping de todas las tiendas (con soporte para múltiples URLs)
+    const scrapingPromises = [];
+
+    for (const store of game.stores) {
+      // Verificar si la tienda tiene múltiples URLs (vendedores)
+      if (store.urls && Array.isArray(store.urls)) {
+        // Scrapear cada vendedor
+        for (const sellerInfo of store.urls) {
+          if (sellerInfo.url) {
+            const promise = (async () => {
+              let result;
+              if (store.name === "falabella") {
+                result = await scrapeFalabella(sellerInfo.url);
+              } else if (store.name === "weplay") {
+                result = await scrapeWeplay(sellerInfo.url);
+              } else if (store.name === "paris") {
+                result = await scrapeParis(sellerInfo.url);
+              } else if (store.name === "mercadolibre") {
+                result = await scrapeMercadoLibre(sellerInfo.url);
+              } else if (store.name === "lider") {
+                result = await scrapeLider(sellerInfo.url);
+              } else {
+                return {
+                  store: store.name,
+                  success: false,
+                  error: "Scraper no implementado",
+                };
+              }
+
+              // Agregar información del vendedor al resultado
+              return {
+                ...result,
+                seller: sellerInfo.seller,
+                store: `${store.name} (${sellerInfo.seller})`,
+              };
+            })();
+
+            scrapingPromises.push(promise);
+          }
+        }
+      } else if (store.url) {
+        // URL única (comportamiento anterior)
+        const promise = (async () => {
+          if (store.name === "falabella") {
+            return await scrapeFalabella(store.url);
+          }
+          if (store.name === "weplay") {
+            return await scrapeWeplay(store.url);
+          }
+          if (store.name === "paris") {
+            return await scrapeParis(store.url);
+          }
+          if (store.name === "mercadolibre") {
+            return await scrapeMercadoLibre(store.url);
+          }
+          if (store.name === "lider") {
+            return await scrapeLider(store.url);
+          }
+          return {
+            store: store.name,
+            success: false,
+            error: "Scraper no implementado",
+          };
+        })();
+
+        scrapingPromises.push(promise);
       }
-      if (store.name === "weplay") {
-        return await scrapeWeplay(store.url);
-      }
-      // Aquí puedes agregar más scrapers
-      return {
-        store: store.name,
-        success: false,
-        error: "Scraper no implementado",
-      };
-    });
+    }
 
     const results = await Promise.all(scrapingPromises);
 
@@ -188,15 +243,59 @@ app.post("/api/update-all", async (req, res) => {
     for (const game of games) {
       console.log(`\n📦 Procesando: ${game.name}`);
 
-      const scrapingPromises = game.stores.map(async (store) => {
-        if (store.name === "falabella") {
-          return await scrapeFalabella(store.url);
+      const scrapingPromises = [];
+
+      for (const store of game.stores) {
+        // Soporte para múltiples URLs por tienda
+        if (store.urls && Array.isArray(store.urls)) {
+          for (const sellerInfo of store.urls) {
+            if (sellerInfo.url) {
+              const promise = (async () => {
+                let result;
+                if (store.name === "falabella") {
+                  result = await scrapeFalabella(sellerInfo.url);
+                } else if (store.name === "weplay") {
+                  result = await scrapeWeplay(sellerInfo.url);
+                } else if (store.name === "paris") {
+                  result = await scrapeParis(sellerInfo.url);
+                } else if (store.name === "mercadolibre") {
+                  result = await scrapeMercadoLibre(sellerInfo.url);
+                } else if (store.name === "lider") {
+                  result = await scrapeLider(sellerInfo.url);
+                } else {
+                  return { store: store.name, success: false };
+                }
+                return {
+                  ...result,
+                  seller: sellerInfo.seller,
+                  store: `${store.name} (${sellerInfo.seller})`,
+                };
+              })();
+              scrapingPromises.push(promise);
+            }
+          }
+        } else if (store.url) {
+          const promise = (async () => {
+            if (store.name === "falabella") {
+              return await scrapeFalabella(store.url);
+            }
+            if (store.name === "weplay") {
+              return await scrapeWeplay(store.url);
+            }
+            if (store.name === "paris") {
+              return await scrapeParis(store.url);
+            }
+            if (store.name === "mercadolibre") {
+              return await scrapeMercadoLibre(store.url);
+            }
+            if (store.name === "lider") {
+              return await scrapeLider(store.url);
+            }
+            return { store: store.name, success: false };
+          })();
+          scrapingPromises.push(promise);
         }
-        if (store.name === "weplay") {
-          return await scrapeWeplay(store.url);
-        }
-        return { store: store.name, success: false };
-      });
+      }
 
       const gameResults = await Promise.all(scrapingPromises);
       const successfulPrices = gameResults.filter((r) => r.success);
